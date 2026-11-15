@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D AC Electromagnetic Induction &amp; Lenz's Law Simulator</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #090d16;
+      color: #e2e8f0;
+      overflow-x: hidden;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #1e293b;
+      height: 6px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #38bdf8;
+      cursor: pointer;
+      border: 2px solid #0f172a;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.65);
+    }
+    .label-3d {
+      position: absolute;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: opacity 0.15s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between select-none">
+
+  <!-- Top Header -->
+  <header class="glass-panel sticky top-0 z-30 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 font-bold text-slate-950 text-lg">
+        &Phi;
+      </div>
+      <div>
+        <h1 class="text-sm sm:text-base font-bold text-white tracking-tight flex items-center gap-2">
+          AC Coil Electromagnetic Induction &amp; Lenz's Law 3D Simulator
+        </h1>
+        <p class="text-xs text-slate-400">
+          Faraday's Law <span class="mono text-amber-400">e(t) = -N &cdot; d&Phi;/dt</span> &bull; Self-Induced Counter-EMF &amp; Opposing Flux
+        </p>
+      </div>
+    </div>
+
+    <!-- Quadrant Quick-Snap Presets -->
+    <div class="flex flex-wrap items-center gap-1.5">
+      <span class="text-[11px] uppercase tracking-wider text-slate-400 mr-1 font-semibold">Phase Snap:</span>
+      <button id="btn-phase-0" class="px-2.5 py-1 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition">
+        0&deg; (Max |e|)
+      </button>
+      <button id="btn-phase-45" class="px-2.5 py-1 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+        45&deg; (+I Rising)
+      </button>
+      <button id="btn-phase-90" class="px-2.5 py-1 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition">
+        90&deg; (Peak &Phi;, e=0)
+      </button>
+      <button id="btn-phase-135" class="px-2.5 py-1 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+        135&deg; (+I Falling)
+      </button>
+      <button id="btn-phase-180" class="px-2.5 py-1 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition">
+        180&deg; (Max +e)
+      </button>
+      <button id="btn-phase-270" class="px-2.5 py-1 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition">
+        270&deg; (-Peak &Phi;)
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Grid -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 max-w-[1600px] w-full mx-auto">
+
+    <!-- Left / Center: 3D Interactive Viewport (7 cols on lg) -->
+    <section class="lg:col-span-7 flex flex-col gap-3">
+      <div class="relative w-full h-[480px] sm:h-[580px] rounded-xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl" id="viewport-container">
+        <div id="three-canvas" class="w-full h-full"></div>
+
+        <!-- 3D Floating HTML Overlays -->
+        <div id="label-north" class="label-3d bg-cyan-950/90 text-cyan-300 border border-cyan-500/50">N Pole</div>
+        <div id="label-south" class="label-3d bg-rose-950/90 text-rose-300 border border-rose-500/50">S Pole</div>
+        <div id="label-b-vec" class="label-3d bg-cyan-900/95 text-cyan-200 border border-cyan-400/80">
+          Primary Flux &Phi;(t)
+        </div>
+        <div id="label-lenz-vec" class="label-3d bg-fuchsia-950/95 text-fuchsia-200 border border-fuchsia-400/80">
+          Lenz Opposing Flux &Phi;<sub>L</sub> (-d&Phi;/dt)
+        </div>
+        <!-- Explicit Induced EMF Terminal Polarity (+ / -) Badges -->
+        <div id="label-emf-left" class="label-3d bg-amber-950/95 text-amber-300 border-2 border-amber-400 font-bold text-xs px-2.5 py-1">
+          Induced EMF: +
+        </div>
+        <div id="label-emf-right" class="label-3d bg-slate-900/95 text-slate-300 border-2 border-slate-500 font-bold text-xs px-2.5 py-1">
+          Induced EMF: &minus;
+        </div>
+        <!-- AC Source Symbol Label -->
+        <div id="label-ac-source" class="label-3d bg-slate-900/95 text-cyan-300 border border-cyan-500/50 mono text-[11px]">
+          AC Supply (~)
+        </div>
+
+        <!-- Top-Left Legend Overlay -->
+        <div class="absolute top-3 left-3 glass-panel rounded-lg p-2.5 text-xs space-y-1.5 pointer-events-none max-w-[285px]">
+          <div class="font-semibold text-slate-200 border-b border-slate-700/80 pb-1 mb-1 flex items-center justify-between">
+            <span>3D Field, Current &amp; EMF Key</span>
+            <span class="mono text-[10px] text-slate-400">Drag to Orbit</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-cyan-400 inline-block shadow shadow-cyan-400/50"></span>
+            <span class="text-slate-300">Primary AC Flux <span class="mono text-cyan-300">&Phi;(t)</span> Loops &amp; Vector</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-fuchsia-400 inline-block shadow shadow-fuchsia-400/60"></span>
+            <span class="text-slate-300">Lenz Opposing Flux <span class="mono text-fuchsia-300">&Phi;<sub>L</sub></span> Loops &amp; Vector</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-emerald-400 inline-block shadow shadow-emerald-400/50"></span>
+            <span class="text-slate-300">AC Source Current <span class="mono text-emerald-300">i(t)</span> Arrows</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-amber-400 inline-block shadow shadow-amber-400/50"></span>
+            <span class="text-slate-300">Opposing Current <span class="mono text-amber-300">i<sub>L</sub></span> &amp; EMF <span class="mono text-amber-300">(+/&minus;)</span></span>
+          </div>
+        </div>
+
+        <!-- Top-Right Camera & Layer Controls -->
+        <div class="absolute top-3 right-3 flex flex-col gap-1.5">
+          <button id="btn-reset-cam" class="glass-panel px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:bg-slate-800/90 transition border border-slate-700">
+            Reset Camera
+          </button>
+          <button id="btn-toggle-core" class="glass-panel px-2.5 py-1.5 rounded-lg text-xs font-medium text-cyan-300 hover:bg-slate-800/90 transition border border-slate-700">
+            Core: Air (&mu;<sub>r</sub>=1)
+          </button>
+          <button id="btn-toggle-lenz" class="glass-panel px-2.5 py-1.5 rounded-lg text-xs font-medium text-fuchsia-300 hover:bg-slate-800/90 transition border border-slate-700">
+            Lenz Vectors: ON
+          </button>
+        </div>
+
+        <!-- Bottom Watermark & Live Phase Bar -->
+        <div class="absolute bottom-2.5 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+          <div class="glass-panel px-3 py-1 rounded-md text-xs flex items-center gap-3">
+            <span>Phase <strong id="hud-angle" class="mono text-cyan-300">0.0&deg;</strong></span>
+            <span class="text-slate-600">|</span>
+            <span>State: <strong id="hud-quadrant" class="text-amber-300">Q1: Flux Rising (+)</strong></span>
+          </div>
+          <div class="px-2.5 py-1 rounded bg-slate-950/75 border border-slate-800/80 text-[11px] mono text-slate-400 tracking-wide">
+            sangitpoudel,9848129193
+          </div>
+        </div>
+      </div>
+
+
+    </section>
+
+    <!-- Right Column: Oscilloscope, Phasor Diagram, Live Telemetry & Parameter Sliders (5 cols on lg) -->
+    <section class="lg:col-span-5 flex flex-col gap-3">
+
+      <!-- Real-Time Instantaneous Readouts (4 Cards) -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div class="glass-panel rounded-lg p-2.5 border-l-2 border-emerald-400">
+          <div class="text-[11px] text-slate-400 font-medium">Current i(t)</div>
+          <div id="val-current" class="text-base font-bold mono text-emerald-300 mt-0.5">+0.00 A</div>
+          <div id="sub-current" class="text-[10px] text-slate-400 mono">I_m = 5.0 A</div>
+        </div>
+        <div class="glass-panel rounded-lg p-2.5 border-l-2 border-cyan-400">
+          <div class="text-[11px] text-slate-400 font-medium">Flux &Phi;(t)</div>
+          <div id="val-flux" class="text-base font-bold mono text-cyan-300 mt-0.5">+0.00 mWb</div>
+          <div id="sub-flux" class="text-[10px] text-slate-400 mono">&Phi;_m = 12.5 mWb</div>
+        </div>
+        <div class="glass-panel rounded-lg p-2.5 border-l-2 border-amber-400">
+          <div class="text-[11px] text-slate-400 font-medium">Induced e(t)</div>
+          <div id="val-emf" class="text-base font-bold mono text-amber-300 mt-0.5">-18.85 V</div>
+          <div id="sub-emf" class="text-[10px] text-slate-400 mono">E_m = 18.85 V</div>
+        </div>
+        <div class="glass-panel rounded-lg p-2.5 border-l-2 border-fuchsia-400">
+          <div class="text-[11px] text-slate-400 font-medium">Opposing &Phi;<sub>L</sub>(t)</div>
+          <div id="val-vs" class="text-base font-bold mono text-fuchsia-300 mt-0.5">-12.50 mWb</div>
+          <div id="sub-vs" class="text-[10px] text-slate-400 mono">Lags &Phi; by 90&deg;</div>
+        </div>
+      </div>
+
+      <!-- Synchronized Dual Canvas: Waveforms + Phasor Vector Diagram -->
+      <div class="glass-panel rounded-xl p-3 border border-slate-800 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">
+            Oscilloscope &amp; Phasor Diagram (&Phi;<sub>L</sub> &amp; e<sub>L</sub> Lag &Phi; by 90&deg;)
+          </h2>
+          <span class="text-[11px] mono text-fuchsia-300">&Delta;&theta; = -90&deg;</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+          <!-- Waveform Canvas (8 cols) -->
+          <div class="sm:col-span-8 bg-slate-950/90 rounded-lg border border-slate-800/90 p-1.5">
+            <canvas id="wave-canvas" width="460" height="210" class="w-full h-[195px] block"></canvas>
+          </div>
+          <!-- Phasor Canvas (4 cols) -->
+          <div class="sm:col-span-4 bg-slate-950/90 rounded-lg border border-slate-800/90 p-1.5 flex flex-col items-center">
+            <canvas id="phasor-canvas" width="210" height="210" class="w-full h-[195px] block"></canvas>
+          </div>
+        </div>
+
+        <!-- Legend under graphs -->
+        <div class="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80 gap-2">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-0.5 bg-cyan-400 inline-block"></span> Primary &Phi;(t) = &Phi;<sub>m</sub>sin(&omega;t)</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-0.5 bg-fuchsia-400 inline-block"></span> Opposing &Phi;<sub>L</sub>(t) = -&Phi;<sub>m</sub>cos(&omega;t)</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-0.5 bg-amber-400 inline-block"></span> Induced e(t) = -E<sub>m</sub>cos(&omega;t)</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-0.5 bg-emerald-400 inline-block"></span> Current i(t)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Simulation & Coil Parameters Panel -->
+      <div class="glass-panel rounded-xl p-3.5 border border-slate-800 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Coil &amp; AC Excitation Controls</span>
+          <div class="flex items-center gap-2">
+            <button id="btn-play-pause" class="px-3 py-1 rounded-md text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition shadow shadow-cyan-500/20">
+              Pause
+            </button>
+            <button id="btn-step" class="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+              Step +15&deg;
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <!-- Phase Scrubbing Slider -->
+          <div class="space-y-1 sm:col-span-2 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+            <div class="flex justify-between">
+              <label for="slider-phase" class="text-slate-300 font-medium">Manual Phase Angle (&omega;t) Scrubber</label>
+              <span id="lbl-phase" class="mono text-cyan-300 font-semibold">0&deg; (0.00 rad)</span>
+            </div>
+            <input id="slider-phase" type="range" min="0" max="360" step="1" value="0" class="w-full" />
+          </div>
+
+          <!-- Number of Turns N -->
+          <div class="space-y-1">
+            <div class="flex justify-between">
+              <label for="slider-turns" class="text-slate-300">Coil Turns (N)</label>
+              <span id="lbl-turns" class="mono text-amber-300 font-semibold">12 turns</span>
+            </div>
+            <input id="slider-turns" type="range" min="4" max="24" step="1" value="12" class="w-full" />
+          </div>
+
+          <!-- Peak Current Im -->
+          <div class="space-y-1">
+            <div class="flex justify-between">
+              <label for="slider-current" class="text-slate-300">Peak Current (I<sub>m</sub>)</label>
+              <span id="lbl-current" class="mono text-emerald-300 font-semibold">5.0 A</span>
+            </div>
+            <input id="slider-current" type="range" min="1" max="10" step="0.5" value="5.0" class="w-full" />
+          </div>
+
+          <!-- AC Frequency f -->
+          <div class="space-y-1">
+            <div class="flex justify-between">
+              <label for="slider-freq" class="text-slate-300">AC Frequency (f)</label>
+              <span id="lbl-freq" class="mono text-cyan-300 font-semibold">50 Hz</span>
+            </div>
+            <input id="slider-freq" type="range" min="10" max="100" step="5" value="50" class="w-full" />
+          </div>
+
+          <!-- Animation Speed Multiplier -->
+          <div class="space-y-1">
+            <div class="flex justify-between">
+              <label for="slider-speed" class="text-slate-300">Sim Time-Stretch</label>
+              <span id="lbl-speed" class="mono text-slate-300 font-semibold">1.0x</span>
+            </div>
+            <input id="slider-speed" type="range" min="0.2" max="2.5" step="0.1" value="1.0" class="w-full" />
+          </div>
+        </div>
+
+
+      </div>
+
+    </section>
+  </main>
+
+  <script>
+    // =========================================================================
+    // STATE & PHYSICAL PARAMETERS
+    // =========================================================================
+    const state = {
+      isPlaying: true,
+      phaseDeg: 0,           // 0 to 360 degrees
+      turns: 12,             // N turns
+      peakCurrent: 5.0,      // Im in Amperes
+      frequency: 50,         // f in Hz (nominal display & calculation)
+      simSpeed: 1.0,         // visual angular speed multiplier
+      ironCore: false,       // false = Air core (mu_r = 1), true = Iron core (mu_r = 2.2 visual scale)
+      showLenzVectors: true,
+      // Instantaneous computed values
+      i_inst: 0,
+      phi_max: 0,            // in mWb
+      phi_inst: 0,           // in mWb
+      dphi_dt: 0,            // normalized rate of change cos(wt)
+      emf_max: 0,            // Peak induced EMF in Volts
+      emf_inst: 0,           // Instantaneous self-induced EMF e(t) = -N dPhi/dt
+      vs_inst: 0             // Applied AC source voltage v_s(t) = +N dPhi/dt
+    };
+
+    // DOM References
+    const container = document.getElementById('viewport-container');
+    const canvasHolder = document.getElementById('three-canvas');
+    const waveCanvas = document.getElementById('wave-canvas');
+    const waveCtx = waveCanvas.getContext('2d');
+    const phasorCanvas = document.getElementById('phasor-canvas');
+    const phasorCtx = phasorCanvas.getContext('2d');
+
+    const labelNorth = document.getElementById('label-north');
+    const labelSouth = document.getElementById('label-south');
+    const labelBVec = document.getElementById('label-b-vec');
+    const labelLenzVec = document.getElementById('label-lenz-vec');
+    const labelEmfLeft = document.getElementById('label-emf-left');
+    const labelEmfRight = document.getElementById('label-emf-right');
+    const labelAcSource = document.getElementById('label-ac-source');
+
+    // =========================================================================
+    // THREE.JS SCENE INITIALIZATION
+    // =========================================================================
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x070b14);
+    scene.fog = new THREE.FogExp2(0x070b14, 0.022);
+
+    const camera = new THREE.PerspectiveCamera(
+      42,
+      container.clientWidth / container.clientHeight,
+      0.1,
+      100
+    );
+    camera.position.set(0, 5.2, 13.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    canvasHolder.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.maxDistance = 26;
+    controls.minDistance = 5;
+    controls.target.set(0, 0.2, 0);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0x38bdf8, 0.9);
+    dirLight1.position.set(8, 12, 10);
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0xf59e0b, 0.6);
+    dirLight2.position.set(-8, -6, 8);
+    scene.add(dirLight2);
+
+    // Subtle Reference Grid
+    const gridHelper = new THREE.GridHelper(22, 22, 0x1e293b, 0x0f172a);
+    gridHelper.position.y = -3.2;
+    scene.add(gridHelper);
+
+    // =========================================================================
+    // 3D OBJECTS: COIL, IRON CORE, AC SOURCE, VOLTMETER, FLUX LOOPS, ARROWS
+    // =========================================================================
+    const coilRadius = 1.35;
+    const coilLength = 5.6;
+
+    // 1. Ferromagnetic / Air Core Cylinder
+    const coreGeo = new THREE.CylinderGeometry(coilRadius * 0.78, coilRadius * 0.78, coilLength + 0.6, 36);
+    coreGeo.rotateZ(Math.PI / 2);
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0x475569,
+      metalness: 0.75,
+      roughness: 0.25,
+      transparent: true,
+      opacity: 0.14
+    });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    scene.add(coreMesh);
+
+    // 2. Helical Copper Solenoid Coil & Clean Direction Indicators (No Electron Beads)
+    let coilMesh = null;
+    let leadMeshes = [];
+
+    // Source Current i(t) Arrows (Emerald) & Lenz Opposing Current i_L(t) Arrows (Amber)
+    // Placed clearly along the left/right vertical leads AND on the front face of the coil turns
+    const iArrowLeft = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(-3.15, -0.8, 1.15),
+      1.35,
+      0x10b981,
+      0.38,
+      0.24
+    );
+    const iArrowRight = new THREE.ArrowHelper(
+      new THREE.Vector3(0, -1, 0),
+      new THREE.Vector3(3.15, -0.8, 1.15),
+      1.35,
+      0x10b981,
+      0.38,
+      0.24
+    );
+    scene.add(iArrowLeft, iArrowRight);
+
+    // Opposing Current (i_L) Arrows on Left & Right Leads (Amber)
+    const oppArrowLeft = new THREE.ArrowHelper(
+      new THREE.Vector3(0, -1, 0),
+      new THREE.Vector3(-2.45, -0.8, 1.15),
+      1.35,
+      0xfbbf24,
+      0.38,
+      0.24
+    );
+    const oppArrowRight = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(2.45, -0.8, 1.15),
+      1.35,
+      0xfbbf24,
+      0.38,
+      0.24
+    );
+    scene.add(oppArrowLeft, oppArrowRight);
+
+    // Front-of-Coil Winding Current Arrows:
+    // Shows Source Current i(t) (Emerald) vs Opposing Induced Current i_L (Amber) right on the coil turns!
+    const windingSourceArrows = [];
+    const windingOppArrows = [];
+    [-1.4, 0, 1.4].forEach((xPos) => {
+      const sArr = new THREE.ArrowHelper(
+        new THREE.Vector3(0, -1, 0),
+        new THREE.Vector3(xPos - 0.18, 0, coilRadius + 0.22),
+        1.05,
+        0x10b981,
+        0.32,
+        0.20
+      );
+      const oArr = new THREE.ArrowHelper(
+        new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(xPos + 0.18, 0, coilRadius + 0.22),
+        1.05,
+        0xfbbf24,
+        0.32,
+        0.20
+      );
+      scene.add(sArr, oArr);
+      windingSourceArrows.push({ arrow: sArr, x: xPos - 0.18 });
+      windingOppArrows.push({ arrow: oArr, x: xPos + 0.18 });
+    });
+
+    // Custom Helix Curve for a given number of turns
+    class SolenoidCurve extends THREE.Curve {
+      constructor(turns, radius, length) {
+        super();
+        this.turns = turns;
+        this.radius = radius;
+        this.length = length;
+      }
+      getPoint(t) {
+        const x = (t - 0.5) * this.length;
+        const angle = t * this.turns * Math.PI * 2;
+        const y = this.radius * Math.cos(angle);
+        const z = this.radius * Math.sin(angle);
+        return new THREE.Vector3(x, y, z);
+      }
+    }
+
+    let currentHelixCurve = new SolenoidCurve(state.turns, coilRadius, coilLength);
+
+    function rebuildCoilGeometry(turns) {
+      if (coilMesh) {
+        scene.remove(coilMesh);
+        coilMesh.geometry.dispose();
+      }
+      leadMeshes.forEach(m => {
+        scene.remove(m);
+        m.geometry.dispose();
+      });
+      leadMeshes = [];
+
+      currentHelixCurve = new SolenoidCurve(turns, coilRadius, coilLength);
+      const tubeGeo = new THREE.TubeGeometry(currentHelixCurve, turns * 28, 0.085, 14, false);
+      const copperMat = new THREE.MeshStandardMaterial({
+        color: 0xd97706,
+        metalness: 0.82,
+        roughness: 0.22,
+        emissive: 0x451a03,
+        emissiveIntensity: 0.25
+      });
+      coilMesh = new THREE.Mesh(tubeGeo, copperMat);
+      scene.add(coilMesh);
+
+      // Clean schematic leads connecting coil ends A and B to the circular AC Source (~)
+      const startPt = currentHelixCurve.getPoint(0); // Left end A (-L/2, R, 0)
+      const endPt = currentHelixCurve.getPoint(1);   // Right end B (+L/2, R, 0)
+
+      const leftLeadPath = new THREE.CatmullRomCurve3([
+        startPt,
+        new THREE.Vector3(-coilLength / 2, 0.2, 1.15),
+        new THREE.Vector3(-coilLength / 2, -2.35, 1.15),
+        new THREE.Vector3(-0.78, -2.35, 1.15)
+      ]);
+      const rightLeadPath = new THREE.CatmullRomCurve3([
+        endPt,
+        new THREE.Vector3(coilLength / 2, 0.2, 1.15),
+        new THREE.Vector3(coilLength / 2, -2.35, 1.15),
+        new THREE.Vector3(0.78, -2.35, 1.15)
+      ]);
+
+      const leftLeadGeo = new THREE.TubeGeometry(leftLeadPath, 32, 0.055, 10, false);
+      const rightLeadGeo = new THREE.TubeGeometry(rightLeadPath, 32, 0.055, 10, false);
+      const leftLead = new THREE.Mesh(leftLeadGeo, copperMat);
+      const rightLead = new THREE.Mesh(rightLeadGeo, copperMat);
+      scene.add(leftLead, rightLead);
+      leadMeshes.push(leftLead, rightLead);
+    }
+
+    rebuildCoilGeometry(state.turns);
+
+    // 3. Schematic Circular AC Source Symbol (~) (NO battery box or +/- posts!)
+    const acSourceGroup = new THREE.Group();
+    acSourceGroup.position.set(0, -2.35, 1.15);
+    scene.add(acSourceGroup);
+
+    // Outer circular ring of AC symbol
+    const acRingGeo = new THREE.TorusGeometry(0.78, 0.065, 16, 48);
+    const acRingMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.45,
+      metalness: 0.6,
+      roughness: 0.25
+    });
+    const acRingMesh = new THREE.Mesh(acRingGeo, acRingMat);
+    acSourceGroup.add(acRingMesh);
+
+    // Dark backing disc inside AC ring
+    const acDiscGeo = new THREE.CylinderGeometry(0.76, 0.76, 0.06, 36);
+    acDiscGeo.rotateX(Math.PI / 2);
+    const acDiscMat = new THREE.MeshBasicMaterial({ color: 0x090d16 });
+    const acDiscMesh = new THREE.Mesh(acDiscGeo, acDiscMat);
+    acSourceGroup.add(acDiscMesh);
+
+    // 3D Sine Wave (~) Tube inside the AC Symbol Ring
+    class SineSymbolCurve extends THREE.Curve {
+      getPoint(t) {
+        const x = (t - 0.5) * 0.96;
+        const y = 0.28 * Math.sin((t - 0.5) * Math.PI * 2);
+        return new THREE.Vector3(x, y, 0.05);
+      }
+    }
+    const sineWaveGeo = new THREE.TubeGeometry(new SineSymbolCurve(), 36, 0.055, 10, false);
+    const sineWaveMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
+    const sineWaveMesh = new THREE.Mesh(sineWaveGeo, sineWaveMat);
+    acSourceGroup.add(sineWaveMesh);
+
+    // Explicit Coil Terminal Nodes (Left = Terminal A, Right = Terminal B) where Induced EMF Polarity (+/-) is measured
+    const nodeGeo = new THREE.SphereGeometry(0.18, 20, 20);
+    const leftTermNodeMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xd97706, emissiveIntensity: 0.6 });
+    const rightTermNodeMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xd97706, emissiveIntensity: 0.6 });
+    const leftTermNode = new THREE.Mesh(nodeGeo, leftTermNodeMat);
+    const rightTermNode = new THREE.Mesh(nodeGeo, rightTermNodeMat);
+    leftTermNode.position.set(-coilLength / 2, 0.2, 1.15);
+    rightTermNode.position.set(coilLength / 2, 0.2, 1.15);
+    scene.add(leftTermNode, rightTermNode);
+
+    // Induced EMF Analog Center-Zero Dial Gauge above Coil
+    const gaugeGroup = new THREE.Group();
+    gaugeGroup.position.set(0, 2.85, 0);
+    scene.add(gaugeGroup);
+
+    const dialGeo = new THREE.CylinderGeometry(1.05, 1.05, 0.16, 32);
+    dialGeo.rotateX(Math.PI / 2);
+    const dialMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.4, roughness: 0.5 });
+    const dialMesh = new THREE.Mesh(dialGeo, dialMat);
+    gaugeGroup.add(dialMesh);
+
+    const rimGeo = new THREE.TorusGeometry(1.05, 0.06, 12, 36);
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.7, roughness: 0.3 });
+    const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+    gaugeGroup.add(rimMesh);
+
+    // Voltmeter Needle
+    const needleGroup = new THREE.Group();
+    needleGroup.position.set(0, 0, 0.12);
+    const needleGeo = new THREE.ConeGeometry(0.07, 0.85, 12);
+    needleGeo.translate(0, 0.35, 0);
+    const needleMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+    const needleMesh = new THREE.Mesh(needleGeo, needleMat);
+    needleGroup.add(needleMesh);
+    gaugeGroup.add(needleGroup);
+
+    // 4. Primary Magnetic Flux Loops (Cyan) & Lenz Opposing Magnetic Flux Loops (Magenta)
+    const fluxGroup = new THREE.Group();
+    scene.add(fluxGroup);
+
+    const lenzFluxGroup = new THREE.Group();
+    scene.add(lenzFluxGroup);
+
+    const fluxLoops = [];
+    const lenzFluxLoops = [];
+
+    class FluxLoopCurve extends THREE.Curve {
+      constructor(a, b, yOffset, rotAngle) {
+        super();
+        this.a = a;             // semi-major axis along X
+        this.b = b;             // semi-minor axis radially
+        this.yOffset = yOffset; // radial shift from center axis
+        this.rotAngle = rotAngle;
+      }
+      getPoint(t) {
+        const theta = t * Math.PI * 2;
+        const x = this.a * Math.sin(theta);
+        const r = this.yOffset + this.b * (1 - Math.cos(theta)) * 0.5;
+        const y = r * Math.cos(this.rotAngle);
+        const z = r * Math.sin(this.rotAngle);
+        return new THREE.Vector3(x, y, z);
+      }
+    }
+
+    // 4a. Primary AC Magnetic Flux Loops Phi(t) in Cyan (4 planes)
+    const primaryAngles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
+    primaryAngles.forEach((rotAngle) => {
+      [
+        { a: 4.1, b: 2.35, yOff: 0.38 },
+        { a: 5.0, b: 3.65, yOff: 0.68 }
+      ].forEach((cfg) => {
+        const curve = new FluxLoopCurve(cfg.a, cfg.b, cfg.yOff, rotAngle);
+        const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.028, 8, true);
+        const tubeMat = new THREE.MeshBasicMaterial({
+          color: 0x22d3ee,
+          transparent: true,
+          opacity: 0.5
+        });
+        const mesh = new THREE.Mesh(tubeGeo, tubeMat);
+        fluxGroup.add(mesh);
+
+        const cones = [];
+        for (let k = 0; k < 2; k++) {
+          const coneGeo = new THREE.ConeGeometry(0.11, 0.32, 12);
+          coneGeo.rotateX(Math.PI / 2);
+          const coneMat = new THREE.MeshBasicMaterial({
+            color: 0x22d3ee,
+            transparent: true,
+            opacity: 0.9
+          });
+          const cone = new THREE.Mesh(coneGeo, coneMat);
+          fluxGroup.add(cone);
+          cones.push({ mesh: cone, u: k * 0.5 + 0.1 });
+        }
+        fluxLoops.push({ curve, mesh, cones, baseA: cfg.a, baseB: cfg.b });
+      });
+    });
+
+    // 4b. Dedicated Lenz's Law Opposing Magnetic Flux Loops Phi_L(t) in Vibrant Magenta/Fuchsia
+    // Interleaved planes so both Primary Flux and Opposing Lenz Flux are unmistakably visible simultaneously
+    const lenzAngles = [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4];
+    lenzAngles.forEach((rotAngle) => {
+      [
+        { a: 3.6, b: 1.95, yOff: 0.24 },
+        { a: 4.5, b: 3.05, yOff: 0.52 }
+      ].forEach((cfg) => {
+        const curve = new FluxLoopCurve(cfg.a, cfg.b, cfg.yOff, rotAngle);
+        const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.032, 8, true);
+        const tubeMat = new THREE.MeshBasicMaterial({
+          color: 0xe879f9,
+          transparent: true,
+          opacity: 0.65
+        });
+        const mesh = new THREE.Mesh(tubeGeo, tubeMat);
+        lenzFluxGroup.add(mesh);
+
+        const cones = [];
+        for (let k = 0; k < 2; k++) {
+          const coneGeo = new THREE.ConeGeometry(0.12, 0.34, 12);
+          coneGeo.rotateX(Math.PI / 2);
+          const coneMat = new THREE.MeshBasicMaterial({
+            color: 0xf0abfc,
+            transparent: true,
+            opacity: 0.95
+          });
+          const cone = new THREE.Mesh(coneGeo, coneMat);
+          lenzFluxGroup.add(cone);
+          cones.push({ mesh: cone, u: k * 0.5 + 0.35 });
+        }
+        lenzFluxLoops.push({ curve, mesh, cones, baseA: cfg.a, baseB: cfg.b });
+      });
+    });
+
+    // 5. High-Visibility 3D Core Vector Arrows for Primary Flux Phi(t) and Lenz Opposing Flux Phi_L(t)
+    function createThickVectorArrow(hexColor) {
+      const group = new THREE.Group();
+      const shaftGeo = new THREE.CylinderGeometry(0.09, 0.09, 1, 16);
+      shaftGeo.rotateZ(-Math.PI / 2);
+      shaftGeo.translate(0.5, 0, 0);
+      const mat = new THREE.MeshStandardMaterial({
+        color: hexColor,
+        emissive: hexColor,
+        emissiveIntensity: 0.45,
+        roughness: 0.2
+      });
+      const shaft = new THREE.Mesh(shaftGeo, mat);
+      const headGeo = new THREE.ConeGeometry(0.24, 0.55, 20);
+      headGeo.rotateZ(-Math.PI / 2);
+      const head = new THREE.Mesh(headGeo, mat);
+      group.add(shaft, head);
+      return {
+        group,
+        setVector(dirSign, length, yPos) {
+          const safeLen = Math.max(0.35, length);
+          group.position.set(-dirSign * (safeLen * 0.5), yPos, 0);
+          group.scale.set(dirSign, 1, 1);
+          shaft.scale.set(Math.max(0.1, safeLen - 0.45), 1, 1);
+          head.position.set(safeLen, 0, 0);
+        }
+      };
+    }
+
+    const primaryCoreVector = createThickVectorArrow(0x22d3ee);
+    scene.add(primaryCoreVector.group);
+
+    const lenzCoreVector = createThickVectorArrow(0xe879f9);
+    scene.add(lenzCoreVector.group);
+
+
+
+    // =========================================================================
+    // PHYSICS ENGINE & SYNCHRONIZED VISUAL UPDATES
+    // =========================================================================
+    function updatePhysicsAndVisuals(dt) {
+      if (state.isPlaying) {
+        // Advance phase smoothly (base 38 deg/sec at 50 Hz & 1.0x speed so student can clearly follow all 4 quadrants)
+        const degPerSec = 38 * (state.frequency / 50) * state.simSpeed;
+        state.phaseDeg = (state.phaseDeg + degPerSec * dt) % 360;
+        document.getElementById('slider-phase').value = Math.round(state.phaseDeg);
+      }
+
+      const rad = (state.phaseDeg * Math.PI) / 180;
+      const sinVal = Math.sin(rad);
+      const cosVal = Math.cos(rad);
+
+      // Core permeability multiplier
+      const muFactor = state.ironCore ? 2.2 : 1.0;
+
+      // 1. Exciting AC Current: i(t) = Im * sin(wt)
+      state.i_inst = state.peakCurrent * sinVal;
+
+      // 2. Magnetic Flux: Phi_max proportional to N * Im * muFactor (scaled in mWb)
+      state.phi_max = 0.21 * state.turns * state.peakCurrent * muFactor;
+      state.phi_inst = state.phi_max * sinVal;
+
+      // 3. Rate of change of flux & Faraday-Lenz Self-Induced EMF:
+      // e(t) = -N * dPhi/dt = -N * Phi_max * w * cos(wt)
+      const omega = 2 * Math.PI * state.frequency;
+      state.emf_max = state.turns * (state.phi_max * 1e-3) * omega; // in Volts
+      state.dphi_dt = cosVal; // normalized derivative
+      state.emf_inst = -state.emf_max * cosVal;
+      state.vs_inst = +state.emf_max * cosVal;
+
+      // 1. Update Source Current i(t) Arrows (Emerald) on Leads & Front Coil Turns
+      // When i(t) > 0 (sinVal > 0): enters Left Lead (+Y), goes DOWN across front of turns (-Y) so Right-Hand Grip gives +X (Right = North), exits Right Lead (-Y)
+      const iSign = sinVal >= 0 ? 1 : -1;
+      const iMag = Math.abs(sinVal);
+      const iArrowLen = Math.max(0.35, iMag * 1.45);
+      const showI = iMag > 0.05;
+
+      iArrowLeft.visible = showI;
+      iArrowRight.visible = showI;
+      iArrowLeft.position.set(-coilLength / 2 - 0.35, -0.8 - iSign * (iArrowLen * 0.5), 1.15);
+      iArrowLeft.setDirection(new THREE.Vector3(0, iSign, 0));
+      iArrowLeft.setLength(iArrowLen, 0.38, 0.24);
+
+      iArrowRight.position.set(coilLength / 2 + 0.35, -0.8 + iSign * (iArrowLen * 0.5), 1.15);
+      iArrowRight.setDirection(new THREE.Vector3(0, -iSign, 0));
+      iArrowRight.setLength(iArrowLen, 0.38, 0.24);
+
+      // Front of coil turns: when i(t) > 0, front of turn moves DOWN (-Y) to produce +X flux by Right-Hand Grip Rule
+      windingSourceArrows.forEach((item) => {
+        item.arrow.visible = showI;
+        const wLen = Math.max(0.3, iMag * 1.15);
+        item.arrow.position.set(item.x, iSign * (wLen * 0.5), coilRadius + 0.18);
+        item.arrow.setDirection(new THREE.Vector3(0, -iSign, 0));
+        item.arrow.setLength(wLen, 0.32, 0.20);
+      });
+
+      // 2. Update Lenz Opposing Current i_L(t) Arrows (Amber) on Leads & Front Coil Turns
+      // Driven by e(t) = -N dPhi/dt ~ -cos(wt).
+      // When dPhi/dt > 0 (Q1, +X flux rising), lenzSign = -1 (-X opposing flux):
+      // By Right-Hand Grip Rule, to produce -X opposing flux, opposing current on the front of the coil turns MUST flow UP (+Y),
+      // exiting out of the Left Terminal A (making Left Terminal POSITIVE +) and entering the Right Terminal B (making Right Terminal NEGATIVE -)!
+      const lenzSign = -cosVal >= 0 ? 1 : -1;
+      const lenzMag = Math.abs(cosVal);
+      const oppArrowLen = Math.max(0.35, lenzMag * 1.45);
+      const showLenzI = state.showLenzVectors && lenzMag > 0.05;
+
+      oppArrowLeft.visible = showLenzI;
+      oppArrowRight.visible = showLenzI;
+      // If lenzSign < 0 (opposing +X flux rise), opposing current flows UP on front of coil and DOWN out of Left Lead (-Y)
+      oppArrowLeft.position.set(-coilLength / 2 + 0.35, -0.8 - lenzSign * (oppArrowLen * 0.5), 1.15);
+      oppArrowLeft.setDirection(new THREE.Vector3(0, lenzSign, 0));
+      oppArrowLeft.setLength(oppArrowLen, 0.38, 0.24);
+
+      oppArrowRight.position.set(coilLength / 2 - 0.35, -0.8 + lenzSign * (oppArrowLen * 0.5), 1.15);
+      oppArrowRight.setDirection(new THREE.Vector3(0, -lenzSign, 0));
+      oppArrowRight.setLength(oppArrowLen, 0.38, 0.24);
+
+      windingOppArrows.forEach((item) => {
+        item.arrow.visible = showLenzI;
+        const wLen = Math.max(0.3, lenzMag * 1.15);
+        item.arrow.position.set(item.x, lenzSign * (wLen * 0.5), coilRadius + 0.18);
+        item.arrow.setDirection(new THREE.Vector3(0, -lenzSign, 0));
+        item.arrow.setLength(wLen, 0.32, 0.20);
+      });
+
+      // Update Terminal Node Colors for Induced Back-EMF Polarity (+ = Amber/Red glow, - = Blue/Slate)
+      // When dPhi/dt > 0 (cosVal > 0), Left Terminal A is (+) and Right Terminal B is (-) so it opposes current entering A
+      if (cosVal >= 0) {
+        leftTermNodeMat.color.setHex(0xfbbf24);
+        leftTermNodeMat.emissive.setHex(0xd97706);
+        rightTermNodeMat.color.setHex(0x64748b);
+        rightTermNodeMat.emissive.setHex(0x1e293b);
+      } else {
+        leftTermNodeMat.color.setHex(0x64748b);
+        leftTermNodeMat.emissive.setHex(0x1e293b);
+        rightTermNodeMat.color.setHex(0xfbbf24);
+        rightTermNodeMat.emissive.setHex(0xd97706);
+      }
+
+      // 3. Update Primary 3D Magnetic Flux Loops Phi(t) (Cyan)
+      const fluxRatio = Math.abs(state.phi_inst) / Math.max(0.1, 0.21 * 12 * 5.0);
+      const clampedFlux = Math.min(1.4, Math.max(0.08, fluxRatio));
+      const fluxSign = sinVal >= 0 ? 1 : -1;
+
+      fluxLoops.forEach((loop) => {
+        loop.mesh.material.opacity = Math.min(0.75, Math.max(0.06, Math.abs(sinVal) * 0.62 * muFactor));
+        loop.mesh.scale.set(1, 0.78 + 0.32 * clampedFlux, 0.78 + 0.32 * clampedFlux);
+
+        loop.cones.forEach((c) => {
+          c.u = (c.u + sinVal * dt * 0.28 + 1.0) % 1.0;
+          const pos = loop.curve.getPoint(c.u);
+          pos.y *= 0.78 + 0.32 * clampedFlux;
+          pos.z *= 0.78 + 0.32 * clampedFlux;
+          c.mesh.position.copy(pos);
+
+          const deltaU = 0.01 * fluxSign;
+          const nextPos = loop.curve.getPoint((c.u + deltaU + 1.0) % 1.0);
+          nextPos.y *= 0.78 + 0.32 * clampedFlux;
+          nextPos.z *= 0.78 + 0.32 * clampedFlux;
+          c.mesh.lookAt(nextPos);
+          c.mesh.material.opacity = Math.min(0.95, Math.max(0.08, Math.abs(sinVal) * 0.95));
+        });
+      });
+
+      // 4. Update Lenz's Law Opposing Magnetic Flux Loops Phi_L(t) (Magenta)
+      const clampedLenz = Math.min(1.4, Math.max(0.08, lenzMag * (state.emf_max / 18.85)));
+
+      lenzFluxGroup.visible = state.showLenzVectors;
+      lenzCoreVector.group.visible = state.showLenzVectors;
+
+      if (state.showLenzVectors) {
+        lenzFluxLoops.forEach((loop) => {
+          loop.mesh.material.opacity = Math.min(0.85, Math.max(0.08, lenzMag * 0.72 * muFactor));
+          loop.mesh.scale.set(1, 0.78 + 0.32 * clampedLenz, 0.78 + 0.32 * clampedLenz);
+
+          loop.cones.forEach((c) => {
+            c.u = (c.u + (-cosVal) * dt * 0.28 + 1.0) % 1.0;
+            const pos = loop.curve.getPoint(c.u);
+            pos.y *= 0.78 + 0.32 * clampedLenz;
+            pos.z *= 0.78 + 0.32 * clampedLenz;
+            c.mesh.position.copy(pos);
+
+            const deltaU = 0.01 * lenzSign;
+            const nextPos = loop.curve.getPoint((c.u + deltaU + 1.0) % 1.0);
+            nextPos.y *= 0.78 + 0.32 * clampedLenz;
+            nextPos.z *= 0.78 + 0.32 * clampedLenz;
+            c.mesh.lookAt(nextPos);
+            c.mesh.material.opacity = Math.min(0.98, Math.max(0.1, lenzMag * 0.98));
+          });
+        });
+      }
+
+      // 5. Update Thick 3D Core Axial Vectors (Primary Flux vs Opposing Lenz Flux)
+      const bLen = Math.max(0.35, Math.abs(sinVal) * 4.8 * (state.ironCore ? 1.2 : 1.0));
+      primaryCoreVector.setVector(fluxSign, bLen, 0.32);
+
+      const lenzLen = Math.max(0.35, lenzMag * 4.5 * (state.ironCore ? 1.2 : 1.0));
+      if (state.showLenzVectors) {
+        lenzCoreVector.setVector(lenzSign, lenzLen, -0.32);
+      }
+
+      // Update Center-Zero EMF Voltmeter Needle
+      // Deflects left/right proportional to instantaneous induced EMF e(t)
+      const maxNeedleAngle = Math.PI * 0.38;
+      needleGroup.rotation.z = -(state.emf_inst / Math.max(1, state.emf_max)) * maxNeedleAngle;
+
+      // Update 3D HTML Floating Labels
+      update3DOverlays(sinVal, cosVal, bLen, lenzLen);
+
+      // Update DOM Telemetry & Lenz Explanation
+      updateDOMReadouts(sinVal, cosVal);
+    }
+
+    function projectToScreen(vec3) {
+      const v = vec3.clone().project(camera);
+      const x = (v.x * 0.5 + 0.5) * container.clientWidth;
+      const y = (-(v.y * 0.5) + 0.5) * container.clientHeight;
+      return { x, y, z: v.z };
+    }
+
+    function update3DOverlays(sinVal, cosVal, bLen, lenzLen) {
+      const rightEnd = new THREE.Vector3(coilLength / 2 + 0.7, 0.9, 0);
+      const leftEnd = new THREE.Vector3(-coilLength / 2 - 0.7, 0.9, 0);
+
+      const pRight = projectToScreen(rightEnd);
+      const pLeft = projectToScreen(leftEnd);
+
+      if (Math.abs(sinVal) < 0.06) {
+        labelNorth.style.opacity = '0';
+        labelSouth.style.opacity = '0';
+      } else {
+        labelNorth.style.opacity = '1';
+        labelSouth.style.opacity = '1';
+        if (sinVal >= 0) {
+          // +X is North, -X is South
+          labelNorth.style.left = `${pRight.x}px`;
+          labelNorth.style.top = `${pRight.y}px`;
+          labelSouth.style.left = `${pLeft.x}px`;
+          labelSouth.style.top = `${pLeft.y}px`;
+        } else {
+          // -X is North, +X is South
+          labelNorth.style.left = `${pLeft.x}px`;
+          labelNorth.style.top = `${pLeft.y}px`;
+          labelSouth.style.left = `${pRight.x}px`;
+          labelSouth.style.top = `${pRight.y}px`;
+        }
+      }
+
+      // Primary Flux Vector tip label
+      const fluxSign = sinVal >= 0 ? 1 : -1;
+      const bTip = new THREE.Vector3(fluxSign * bLen * 0.55, 0.55, 0);
+      const pBTip = projectToScreen(bTip);
+      labelBVec.style.left = `${pBTip.x}px`;
+      labelBVec.style.top = `${pBTip.y}px`;
+      labelBVec.style.opacity = Math.abs(sinVal) > 0.12 ? '1' : '0.25';
+
+      // Lenz Opposing Vector tip label
+      if (state.showLenzVectors) {
+        const lenzSign = -cosVal >= 0 ? 1 : -1;
+        const lTip = new THREE.Vector3(lenzSign * lenzLen * 0.55, -0.95, 0);
+        const pLTip = projectToScreen(lTip);
+        labelLenzVec.style.left = `${pLTip.x}px`;
+        labelLenzVec.style.top = `${pLTip.y}px`;
+        labelLenzVec.style.opacity = Math.abs(cosVal) > 0.12 ? '1' : '0.25';
+      } else {
+        labelLenzVec.style.opacity = '0';
+      }
+
+      // Explicit Induced EMF Polarity (+ / -) Terminal Badges at Left (Terminal A) & Right (Terminal B)
+      const pTermLeft = projectToScreen(new THREE.Vector3(-coilLength / 2 - 0.5, 0.55, 1.15));
+      const pTermRight = projectToScreen(new THREE.Vector3(coilLength / 2 + 0.5, 0.55, 1.15));
+      labelEmfLeft.style.left = `${pTermLeft.x}px`;
+      labelEmfLeft.style.top = `${pTermLeft.y}px`;
+      labelEmfRight.style.left = `${pTermRight.x}px`;
+      labelEmfRight.style.top = `${pTermRight.y}px`;
+
+      if (Math.abs(cosVal) < 0.05) {
+        labelEmfLeft.textContent = 'e(t) = 0 V';
+        labelEmfRight.textContent = 'e(t) = 0 V';
+        labelEmfLeft.style.opacity = '0.5';
+        labelEmfRight.style.opacity = '0.5';
+      } else if (cosVal > 0) {
+        // dPhi/dt > 0: Counter-EMF opposes current entering Left Terminal A -> Left is (+), Right is (-)
+        labelEmfLeft.innerHTML = 'Induced EMF: <span class="text-amber-300 font-extrabold">( + )</span>';
+        labelEmfRight.innerHTML = 'Induced EMF: <span class="text-sky-300 font-extrabold">( &minus; )</span>';
+        labelEmfLeft.className = 'label-3d bg-amber-950/95 text-amber-200 border-2 border-amber-400 font-bold text-xs px-2.5 py-1';
+        labelEmfRight.className = 'label-3d bg-slate-900/95 text-slate-300 border-2 border-sky-400/80 font-bold text-xs px-2.5 py-1';
+        labelEmfLeft.style.opacity = '1';
+        labelEmfRight.style.opacity = '1';
+      } else {
+        // dPhi/dt < 0: Counter-EMF opposes current decrease / reverse rise -> Left is (-), Right is (+)
+        labelEmfLeft.innerHTML = 'Induced EMF: <span class="text-sky-300 font-extrabold">( &minus; )</span>';
+        labelEmfRight.innerHTML = 'Induced EMF: <span class="text-amber-300 font-extrabold">( + )</span>';
+        labelEmfLeft.className = 'label-3d bg-slate-900/95 text-slate-300 border-2 border-sky-400/80 font-bold text-xs px-2.5 py-1';
+        labelEmfRight.className = 'label-3d bg-amber-950/95 text-amber-200 border-2 border-amber-400 font-bold text-xs px-2.5 py-1';
+        labelEmfLeft.style.opacity = '1';
+        labelEmfRight.style.opacity = '1';
+      }
+
+      // AC Source (~) Label
+      const pAc = projectToScreen(new THREE.Vector3(0, -3.35, 1.15));
+      labelAcSource.style.left = `${pAc.x}px`;
+      labelAcSource.style.top = `${pAc.y}px`;
+    }
+
+    function updateDOMReadouts(sinVal, cosVal) {
+      const deg = state.phaseDeg;
+      const rad = (deg * Math.PI) / 180;
+
+      document.getElementById('hud-angle').textContent = `${deg.toFixed(1)}°`;
+      document.getElementById('lbl-phase').textContent = `${Math.round(deg)}° (${rad.toFixed(2)} rad)`;
+
+      // Opposing flux tendency Phi_L(t) = -Phi_max * cos(wt) (lags Phi by 90 deg)
+      const phiL_inst = -state.phi_max * cosVal;
+
+      const signI = state.i_inst >= 0 ? '+' : '';
+      const signPhi = state.phi_inst >= 0 ? '+' : '';
+      const signEmf = state.emf_inst >= 0 ? '+' : '';
+      const signPhiL = phiL_inst >= 0 ? '+' : '';
+
+      document.getElementById('val-current').textContent = `${signI}${state.i_inst.toFixed(2)} A`;
+      document.getElementById('sub-current').textContent = `I_m = ${state.peakCurrent.toFixed(1)} A`;
+
+      document.getElementById('val-flux').textContent = `${signPhi}${state.phi_inst.toFixed(2)} mWb`;
+      document.getElementById('sub-flux').textContent = `Φ_m = ${state.phi_max.toFixed(2)} mWb`;
+
+      document.getElementById('val-emf').textContent = `${signEmf}${state.emf_inst.toFixed(2)} V`;
+      document.getElementById('sub-emf').textContent = `E_m = ${state.emf_max.toFixed(2)} V`;
+
+      document.getElementById('val-vs').textContent = `${signPhiL}${phiL_inst.toFixed(2)} mWb`;
+
+      const qEl = document.getElementById('hud-quadrant');
+      if (deg >= 0 && deg < 90) {
+        qEl.textContent = 'Q1: +Φ Rising | Φ_L Opposes (-Left)';
+      } else if (deg >= 90 && deg < 180) {
+        qEl.textContent = 'Q2: +Φ Falling | Φ_L Supports (+Right)';
+      } else if (deg >= 180 && deg < 270) {
+        qEl.textContent = 'Q3: -Φ Rising | Φ_L Opposes (+Right)';
+      } else {
+        qEl.textContent = 'Q4: -Φ Falling | Φ_L Supports (-Left)';
+      }
+    }
+
+    // =========================================================================
+    // 2D OSCILLOSCOPE & PHASOR DIAGRAM RENDERING
+    // =========================================================================
+    function drawOscilloscope() {
+      const w = waveCanvas.width;
+      const h = waveCanvas.height;
+      waveCtx.clearRect(0, 0, w, h);
+
+      const padL = 36;
+      const padR = 14;
+      const padT = 18;
+      const padB = 24;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+      const midY = padT + plotH / 2;
+
+      // Grid lines (0, 90, 180, 270, 360)
+      waveCtx.strokeStyle = '#1e293b';
+      waveCtx.lineWidth = 1;
+      for (let deg = 0; deg <= 360; deg += 90) {
+        const x = padL + (deg / 360) * plotW;
+        waveCtx.beginPath();
+        waveCtx.moveTo(x, padT);
+        waveCtx.lineTo(x, padT + plotH);
+        waveCtx.stroke();
+
+        waveCtx.fillStyle = '#64748b';
+        waveCtx.font = '10px JetBrains Mono';
+        waveCtx.textAlign = 'center';
+        waveCtx.fillText(`${deg}°`, x, h - 7);
+      }
+
+      // Center zero axis
+      waveCtx.strokeStyle = '#334155';
+      waveCtx.beginPath();
+      waveCtx.moveTo(padL, midY);
+      waveCtx.lineTo(padL + plotW, midY);
+      waveCtx.stroke();
+
+      // Normalized amplitudes based on current slider values
+      const iAmp = (state.peakCurrent / 10) * (plotH * 0.42);
+      const phiAmp = Math.min(plotH * 0.44, (state.phi_max / 50) * (plotH * 0.42));
+      const emfAmp = Math.min(plotH * 0.46, (state.emf_max / 60) * (plotH * 0.42));
+
+      // Helper to plot curve
+      function plotWave(fn, amp, color, dashed = false) {
+        waveCtx.save();
+        waveCtx.strokeStyle = color;
+        waveCtx.lineWidth = 2;
+        if (dashed) waveCtx.setLineDash([4, 4]);
+        waveCtx.beginPath();
+        for (let px = 0; px <= plotW; px += 2) {
+          const rad = (px / plotW) * Math.PI * 2;
+          const y = midY - fn(rad) * amp;
+          if (px === 0) waveCtx.moveTo(padL + px, y);
+          else waveCtx.lineTo(padL + px, y);
+        }
+        waveCtx.stroke();
+        waveCtx.restore();
+      }
+
+      // 1. Exciting Current i(t) = I_m sin(wt) (emerald)
+      plotWave((r) => Math.sin(r), iAmp, '#34d399', false);
+      // 2. Primary Magnetic Flux Phi(t) = Phi_m sin(wt) (cyan)
+      plotWave((r) => Math.sin(r), phiAmp * 0.88, '#38bdf8', false);
+      // 3. Induced EMF e(t) = -E_m cos(wt) (amber)
+      plotWave((r) => -Math.cos(r), emfAmp, '#fbbf24', false);
+      // 4. Lenz Opposing Flux Phi_L(t) = -Phi_m cos(wt) (dashed vibrant magenta, lags Phi by 90 deg)
+      plotWave((r) => -Math.cos(r), phiAmp * 0.88, '#e879f9', true);
+
+      // Current Phase Cursor Line
+      const curX = padL + (state.phaseDeg / 360) * plotW;
+      waveCtx.strokeStyle = '#f8fafc';
+      waveCtx.lineWidth = 1.2;
+      waveCtx.beginPath();
+      waveCtx.moveTo(curX, padT);
+      waveCtx.lineTo(curX, padT + plotH);
+      waveCtx.stroke();
+
+      // Instantaneous Dots on Cursor
+      const curRad = (state.phaseDeg * Math.PI) / 180;
+      const dots = [
+        { y: midY - Math.sin(curRad) * iAmp, color: '#34d399' },
+        { y: midY - Math.sin(curRad) * phiAmp * 0.88, color: '#38bdf8' },
+        { y: midY - (-Math.cos(curRad)) * phiAmp * 0.88, color: '#e879f9' },
+        { y: midY - (-Math.cos(curRad)) * emfAmp, color: '#fbbf24' }
+      ];
+      dots.forEach((d) => {
+        waveCtx.fillStyle = d.color;
+        waveCtx.beginPath();
+        waveCtx.arc(curX, d.y, 4, 0, Math.PI * 2);
+        waveCtx.fill();
+      });
+    }
+
+    function drawPhasorDiagram() {
+      const w = phasorCanvas.width;
+      const h = phasorCanvas.height;
+      phasorCtx.clearRect(0, 0, w, h);
+
+      const cx = w / 2;
+      const cy = h / 2;
+      const maxR = Math.min(cx, cy) - 24;
+
+      // Reference Circle & Axes
+      phasorCtx.strokeStyle = '#1e293b';
+      phasorCtx.lineWidth = 1;
+      phasorCtx.beginPath();
+      phasorCtx.arc(cx, cy, maxR, 0, Math.PI * 2);
+      phasorCtx.stroke();
+
+      phasorCtx.beginPath();
+      phasorCtx.moveTo(cx - maxR - 8, cy);
+      phasorCtx.lineTo(cx + maxR + 8, cy);
+      phasorCtx.moveTo(cx, cy - maxR - 8);
+      phasorCtx.lineTo(cx, cy + maxR + 8);
+      phasorCtx.stroke();
+
+      const rad = (state.phaseDeg * Math.PI) / 180;
+
+      // Helper to draw a phasor vector at angle theta (standard math CCW from +X)
+      function drawVector(angleRad, length, color, label, dashed = false) {
+        const vx = cx + length * Math.cos(angleRad);
+        const vy = cy - length * Math.sin(angleRad);
+
+        phasorCtx.save();
+        phasorCtx.strokeStyle = color;
+        phasorCtx.fillStyle = color;
+        phasorCtx.lineWidth = 2.4;
+        if (dashed) phasorCtx.setLineDash([4, 3]);
+        phasorCtx.beginPath();
+        phasorCtx.moveTo(cx, cy);
+        phasorCtx.lineTo(vx, vy);
+        phasorCtx.stroke();
+        phasorCtx.restore();
+
+        // Arrowhead
+        phasorCtx.fillStyle = color;
+        const headLen = 7;
+        const a1 = angleRad + Math.PI * 0.82;
+        const a2 = angleRad - Math.PI * 0.82;
+        phasorCtx.beginPath();
+        phasorCtx.moveTo(vx, vy);
+        phasorCtx.lineTo(vx + headLen * Math.cos(a1), vy - headLen * Math.sin(a1));
+        phasorCtx.lineTo(vx + headLen * Math.cos(a2), vy - headLen * Math.sin(a2));
+        phasorCtx.closePath();
+        phasorCtx.fill();
+
+        // Label
+        const lx = cx + (length + 13) * Math.cos(angleRad);
+        const ly = cy - (length + 13) * Math.sin(angleRad);
+        phasorCtx.font = 'bold 10px JetBrains Mono';
+        phasorCtx.textAlign = 'center';
+        phasorCtx.textBaseline = 'middle';
+        phasorCtx.fillText(label, lx, ly);
+      }
+
+      // 1. Primary Flux Phi & Current I Phasor at angle = rad (Cyan)
+      drawVector(rad, maxR * 0.84, '#38bdf8', 'Φ, I', false);
+      // 2. Induced EMF e(t) Phasor lagging Primary Flux by 90 deg (Amber)
+      drawVector(rad - Math.PI / 2, maxR * 0.9, '#fbbf24', 'e(t)', false);
+      // 3. Lenz Opposing Flux Phi_L Phasor lagging Primary Flux by 90 deg (Magenta, co-phasal with e(t))
+      drawVector(rad - Math.PI / 2, maxR * 0.66, '#e879f9', 'Φ_L', true);
+      // 4. Rate of change dPhi/dt leading Primary Flux by 90 deg (Subtle Slate)
+      drawVector(rad + Math.PI / 2, maxR * 0.55, '#64748b', 'dΦ/dt', true);
+
+      // Draw 90 deg lag arc between Primary Flux Phi and Opposing Flux Phi_L / e(t)
+      phasorCtx.strokeStyle = 'rgba(232, 121, 249, 0.65)';
+      phasorCtx.lineWidth = 1.4;
+      phasorCtx.beginPath();
+      phasorCtx.arc(cx, cy, 20, -rad, -(rad - Math.PI / 2), false);
+      phasorCtx.stroke();
+
+      // 90° label on arc
+      const midArc = rad - Math.PI / 4;
+      phasorCtx.fillStyle = '#f0abfc';
+      phasorCtx.font = '9px JetBrains Mono';
+      phasorCtx.fillText('90°', cx + 28 * Math.cos(midArc), cy - 28 * Math.sin(midArc));
+    }
+
+    // =========================================================================
+    // UI EVENT LISTENERS
+    // =========================================================================
+    const btnPlayPause = document.getElementById('btn-play-pause');
+    btnPlayPause.addEventListener('click', () => {
+      state.isPlaying = !state.isPlaying;
+      btnPlayPause.textContent = state.isPlaying ? 'Pause' : 'Play';
+      btnPlayPause.className = state.isPlaying
+        ? 'px-3 py-1 rounded-md text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition shadow shadow-cyan-500/20'
+        : 'px-3 py-1 rounded-md text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition shadow shadow-emerald-500/20';
+    });
+
+    document.getElementById('btn-step').addEventListener('click', () => {
+      state.isPlaying = false;
+      btnPlayPause.textContent = 'Play';
+      state.phaseDeg = (Math.round(state.phaseDeg) + 15) % 360;
+      document.getElementById('slider-phase').value = state.phaseDeg;
+    });
+
+    document.getElementById('slider-phase').addEventListener('input', (e) => {
+      state.isPlaying = false;
+      btnPlayPause.textContent = 'Play';
+      state.phaseDeg = parseFloat(e.target.value);
+    });
+
+    document.getElementById('slider-turns').addEventListener('input', (e) => {
+      state.turns = parseInt(e.target.value, 10);
+      document.getElementById('lbl-turns').textContent = `${state.turns} turns`;
+      rebuildCoilGeometry(state.turns);
+    });
+
+    document.getElementById('slider-current').addEventListener('input', (e) => {
+      state.peakCurrent = parseFloat(e.target.value);
+      document.getElementById('lbl-current').textContent = `${state.peakCurrent.toFixed(1)} A`;
+    });
+
+    document.getElementById('slider-freq').addEventListener('input', (e) => {
+      state.frequency = parseInt(e.target.value, 10);
+      document.getElementById('lbl-freq').textContent = `${state.frequency} Hz`;
+    });
+
+    document.getElementById('slider-speed').addEventListener('input', (e) => {
+      state.simSpeed = parseFloat(e.target.value);
+      document.getElementById('lbl-speed').textContent = `${state.simSpeed.toFixed(1)}x`;
+    });
+
+    // Phase Preset Snap Buttons
+    const presets = [
+      { id: 'btn-phase-0', deg: 0 },
+      { id: 'btn-phase-45', deg: 45 },
+      { id: 'btn-phase-90', deg: 90 },
+      { id: 'btn-phase-135', deg: 135 },
+      { id: 'btn-phase-180', deg: 180 },
+      { id: 'btn-phase-270', deg: 270 }
+    ];
+    presets.forEach((p) => {
+      document.getElementById(p.id).addEventListener('click', () => {
+        state.isPlaying = false;
+        btnPlayPause.textContent = 'Play';
+        state.phaseDeg = p.deg;
+        document.getElementById('slider-phase').value = p.deg;
+      });
+    });
+
+    // Camera & Core Toggles
+    document.getElementById('btn-reset-cam').addEventListener('click', () => {
+      camera.position.set(0, 5.2, 13.5);
+      controls.target.set(0, 0.2, 0);
+      controls.update();
+    });
+
+    const btnToggleCore = document.getElementById('btn-toggle-core');
+    btnToggleCore.addEventListener('click', () => {
+      state.ironCore = !state.ironCore;
+      if (state.ironCore) {
+        coreMat.opacity = 0.65;
+        coreMat.color.setHex(0x64748b);
+        btnToggleCore.innerHTML = 'Core: Ferromagnetic (&mu;<sub>r</sub>&gg;1)';
+      } else {
+        coreMat.opacity = 0.14;
+        coreMat.color.setHex(0x475569);
+        btnToggleCore.innerHTML = 'Core: Air (&mu;<sub>r</sub>=1)';
+      }
+    });
+
+    const btnToggleLenz = document.getElementById('btn-toggle-lenz');
+    btnToggleLenz.addEventListener('click', () => {
+      state.showLenzVectors = !state.showLenzVectors;
+      btnToggleLenz.textContent = state.showLenzVectors ? 'Lenz Vectors: ON' : 'Lenz Vectors: OFF';
+    });
+
+    // Responsive Resize
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+
+    // =========================================================================
+    // MAIN ANIMATION LOOP
+    // =========================================================================
+    let lastTime = performance.now();
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      controls.update();
+      updatePhysicsAndVisuals(dt);
+      drawOscilloscope();
+      drawPhasorDiagram();
+      renderer.render(scene, camera);
+    }
+
+    window.onload = () => {
+      requestAnimationFrame(animate);
+    };
+  </script>
+</body>
+</html>
